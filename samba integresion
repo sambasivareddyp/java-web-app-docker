@@ -1,0 +1,27 @@
+node {
+    def buildnumber = Build_Number
+    stage ("git clone") {
+        git url:"https://github.com/sambasivareddyp/java-web-app-docker.git", branch:"master"
+    }
+    stage ("maven clean package") {
+        def mavenHome = tool name:"maven", type:"maven"
+        sh "${mavenHome}/bin/mvn clean package"
+    }
+    
+    stage ("Build Docker Image") {
+        sh "docker build -t sambasivadocker/java-web-app:${buildnumber} ."
+    }
+    stage ("Docker Login And Push"){
+        withCredentials([string(credentialsId: 'DockerhubPwd', variable: 'DockerhubPwd')]) {
+    sh " docker login -u sambasivadocker -p ${DockerhubPwd}"
+}
+sh "docker push sambasivadocker/java-web-app:${buildnumber}"
+    }
+    
+    stage ("Deploy Application As Docker Container In Docker Deployment Server"){
+        sshagent(['Docker_dev_Server_SSH']) {
+    sh " ssh -o StrictHostKeyChecking=no ubuntu@172.31.32.181 docker rm -f javawebappcontainer || true"
+    sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.32.181 docker run -d -p 8080:8080 --name javawebappcontainer sambasivadocker/java-web-app:${buildnumber}"
+}
+    }
+}
